@@ -7,7 +7,7 @@ Theme: *AMD Ryzen AI NPU でのアプリケーション高速化* — accelerati
 
 ## Goal
 
-Take a trained model (a pretrained detector like YOLOv8n, then my own pose/action model), run its inference on the NPU instead of the CPU, and quantify the speedup and power savings.
+Take a trained model (a pretrained detector like YOLOv8n), run its inference on the NPU instead of the CPU, and quantify the speedup and power savings.
 
 ## Pipeline
 
@@ -26,7 +26,7 @@ The VitisAI EP automatically offloads supported operations to the NPU; the rest 
 
 - Working demo: model running inference on the NPU
 - Benchmark: CPU vs NPU comparison (latency, throughput/FPS, power)
-- Short report / slides on the pipeline and results
+
 
 ## Status
 
