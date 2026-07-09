@@ -30,7 +30,7 @@ The VitisAI EP automatically offloads supported operations to the NPU; the rest 
 
 ## Status
 
-- [ x] Ryzen AI Software installed; `quicktest` passes on NPU
+- [x] Ryzen AI Software installed; `quicktest` passes on NPU
 - [ ] ResNet getting-started example runs on `--ep cpu` and `--ep npu`
 - [ ] YOLOv8n exported, quantized, and running on NPU
 - [ ] CPU-vs-NPU benchmark harness
