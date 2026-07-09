@@ -1,0 +1,8 @@
+# quicktest.py — Strix NPU, 2026-07-09
+# Ryzen AI 1.7.1, XRT 2.21.0, firmware 1.1.2.64
+# Passed after sourcing XRT inside the venv shell.
+
+Setting environment for STX/KRK
+...
+Session successfully initialized.
+Test Finished
