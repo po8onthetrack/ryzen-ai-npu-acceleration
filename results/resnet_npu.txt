@@ -1,0 +1,14 @@
+# ResNet-CIFAR10 INT8 on Ryzen AI NPU (Strix, XDNA2) — 2026-07-12
+
+Operator placement (VitisAI EP):
+  NPU:           398
+  VITIS_EP_CPU:    2   (final dequantize-linear — unsupported on AIE2P target)
+  => 99.5% of operators offloaded to NPU
+  Subgraphs: 1 on NPU, "Actually running on NPU 1"
+
+Target architecture: AMD_AIE2P_4x8_CMC_Overlay  (XDNA2, 4x8 tile array)
+Compile time: ~2 s
+
+Accuracy (10 CIFAR-10 test images): 9/10 correct
+  Image 6: actual=automobile, predicted=truck  (INT8 quantization effect;
+           CPU/FP32 run gets this right — matches AMD's documented output)
