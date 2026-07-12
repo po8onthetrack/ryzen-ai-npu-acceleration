@@ -6,7 +6,9 @@
 - Added XRT source to ~/.bashrc so it's automatic.
 - Session recipe: activate venv + source XRT (both needed every new shell).
 
-## 2026-07-12 — ResNet example: torch conflict + slow CIFAR-10 download
+## 2026-07-12 
+
+## ResNet example: torch conflict + slow CIFAR-10 download. 
 
 **Goal:** run AMD's getting-started ResNet example (CPU vs NPU) to learn the pipeline.
 
@@ -38,7 +40,14 @@ nohup wget -c --tries=50 --timeout=60 --waitretry=10 \
 Target: 163M. torchvision then finds and extracts the tarball — no re-download.
 
 **Next**
-- [ ] Download finishes → `resnet_quantize.py` → `predict.py` (CPU) → `predict.py --ep npu`
-- [ ] Check the `[Vitis AI EP] No. of Operators` line for NPU offload %
-- [ ] Run `benchmark.py` on the quantized model for real latency/throughput
+- [x] Download finishes → `resnet_quantize.py` → `predict.py` (CPU) → `predict.py --ep npu`
+- [x] Check the `[Vitis AI EP] No. of Operators` line for NPU offload %
+- [x] Run `benchmark.py` on the quantized model for real latency/throughput
 - [ ] Then YOLOv8n through the same pipeline
+
+## FIRST RESULT: ResNet on NPU
+- 398/400 ops (99.5%) offloaded to NPU; 2 (dequantize-linear) fall back to CPU
+- Target arch: AMD_AIE2P_4x8_CMC_Overlay (XDNA2, 4x8 tiles)
+- Accuracy: 9/10 CIFAR-10 images (matches AMD's documented output)
+- BENCHMARK: CPU 9.26 ms / 108 inf/s  vs  NPU 1.48 ms / 674 inf/s  => 6.24x speedup
+- NPU jitter far lower than CPU (p95 within 1.5% of mean vs 6% on CPU)
