@@ -206,6 +206,9 @@ def main():
     parser.add_argument("--csv", default="results/benchmark.csv", help="output CSV path")
     parser.add_argument("--cache-dir", default="vitisai_cache", help="VitisAI EP cache dir")
     parser.add_argument("--cache-key", default="modelcachekey", help="VitisAI EP cache key")
+    p.add_argument("--verbose", action="store_true",
+                   help="VitisAI + ORT info logging; shows the [Vitis AI EP] "
+                        "No. of Operators table. Needs a fresh cache to print.")
     args = parser.parse_args()
 
     row = run_benchmark(
