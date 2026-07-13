@@ -73,7 +73,7 @@ def make_dummy_inputs(session, batch: int):
     then warn so you can override with --input-shape if a model needs it.
     """
     feed = {}
-    for inp in session.get_inputs():
+    for inp in session.get_inputs(): #gets the input as descripptors
         np_dtype = _ORT_TYPE_TO_NP.get(inp.type, np.float32)
 
         concrete_shape = []
@@ -104,7 +104,7 @@ def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key):
     # For the NPU, model compilation happens here / on the first run — expect a wait.
     session = ort.InferenceSession(
         model_path, providers=providers, provider_options=provider_options
-    )
+    )#ONNX runtime parses the data
 
     # Confirm which provider actually got used (VitisAI may fall back to CPU
     # for unsupported ops — good to see).
