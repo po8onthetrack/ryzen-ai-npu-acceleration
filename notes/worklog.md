@@ -43,7 +43,7 @@ Target: 163M. torchvision then finds and extracts the tarball — no re-download
 - [x] Download finishes → `resnet_quantize.py` → `predict.py` (CPU) → `predict.py --ep npu`
 - [x] Check the `[Vitis AI EP] No. of Operators` line for NPU offload %
 - [x] Run `benchmark.py` on the quantized model for real latency/throughput
-- [ ] Then YOLOv8n through the same pipeline
+- [x] Then YOLOv8n through the same pipeline
 
 ## FIRST RESULT: ResNet on NPU
 - 398/400 ops (99.5%) offloaded to NPU; 2 (dequantize-linear) fall back to CPU
@@ -51,3 +51,111 @@ Target: 163M. torchvision then finds and extracts the tarball — no re-download
 - Accuracy: 9/10 CIFAR-10 images (matches AMD's documented output)
 - BENCHMARK: CPU 9.26 ms / 108 inf/s  vs  NPU 1.48 ms / 674 inf/s  => 6.24x speedup
 - NPU jitter far lower than CPU (p95 within 1.5% of mean vs 6% on CPU)
+
+
+## 2026-07-13 — YOLOv8m on NPU: deployed, benchmarked, and three traps
+
+**Goal:** deploy YOLOv8m on the NPU and get verified CPU-vs-NPU numbers.
+**Result:** done. YOLO runs on the NPU at 98% operator offload, ~3.6x faster than FP32 CPU.
+
+---
+
+### Results
+
+**YOLOv8m (COCO, 640x640)**
+
+| Config     | Latency  | Throughput   | vs FP32 CPU |
+|------------|----------|--------------|-------------|
+| FP32, CPU  | 123.7 ms | 8.08 inf/s   | 1.0x        |
+| INT8, CPU  | 166.3 ms | 6.01 inf/s   | 0.74x (slower!) |
+| INT8, NPU  | 34.1 ms  | 29.34 inf/s  | **3.6x**    |
+
+NPU offload: **1237 / 1262 ops (98%)**; 18 CPU + 7 VITIS_EP_CPU = 25 ops on CPU
+(the excluded detection head). Compare ResNet: 398/400 (99.5%), only 2 CPU ops.
+
+**Finding: INT8 makes the CPU *slower* (123.7 -> 166.3 ms).** The QDQ
+(quantize/dequantize) nodes are free on the NPU (native INT8 hardware) but are pure
+overhead on the CPU. Quantization is not a general optimization — it is a
+*hardware-targeting decision*. It only pays off if you have hardware built for it.
+This is the argument for the NPU existing, measured on my own machine.
+
+---
+
+### Trap 1 — the detection head must be excluded from quantization
+
+Quantizing the whole model produces a model that **detects nothing**.
+
+Reason: YOLO's head concatenates box coordinates (0–640, big) with confidence scores
+(0–1, tiny) into one tensor. INT8 has only 256 levels and picks ONE scale per tensor.
+To cover 640, the step size is ~2.5 — so every confidence rounds to 0. Nothing passes
+the 0.25 confidence threshold, so no boxes are drawn.
+
+Quark visibly fails at this when not excluded:
+```
+Input pos of concat node /model.22/Concat_10 is 7, min_pos is -3. Modify ipos from 7 to -3.
+...
+[QUARK-WARNING]: The number of adjustments has reached the limit. Please check the model
+```
+Those warnings vanish entirely with the exclusion:
+```
+--exclude_subgraphs "[/model.22/Concat_3], [/model.22/Concat_10]]"
+```
+Confirm it landed by checking the config dump prints
+`subgraphs_to_exclude --- [(['/model.22/Concat_3'], ['/model.22/Concat_10'])]`, not `[]`.
+
+Cost of the exclusion: the head stays FP32 and runs on CPU (~25 ops). Worth it — a
+model that detects nothing is worth 0x speedup.
+
+---
+
+### Trap 2 — AMD's yolov8m example is Windows-only
+
+`utils.py: get_npu_info()` shells out to `pnputil` — a **Windows** utility. On Linux it
+returns `''`, so NPU detection fails. `run_inference.py` only survives because of a
+Python bug: `elif npu_device == 'STX' or 'KRK'` is always truthy. `get_xclbin()` also
+uses Windows paths (`voe-4.0-win_amd64`, backslashes).
+
+=> Their `run_inference.py` cannot be trusted on Linux. Used my own `benchmark.py`
+(clean Linux provider options) instead. 
+---
+
+### Trap 3 — VitisAI runs on the NPU silently (cost hours)
+
+Spent a long time convinced the NPU wasn't being used. It was. The whole time.
+Three things conspired:
+
+1. **VitisAI has its own logger** (glog), set by the *provider option* `'log_level':'info'`
+   — Without it, VitisAI compiles and runs on the NPU with zero output. AMD's `predict.py` sets `log_level`; my script didn't.
+   That's the only reason ResNet "worked" and YOLO "didn't."
+
+2. **camelCase provider options are silently ignored.** Must be snake_case:
+   `cache_dir`, `cache_key`, `log_level`. My `cacheDir`/`cacheKey` were dropped, so
+   VitisAI used defaults and cached elsewhere — the folder I was inspecting stayed empty.
+
+**Note: absence of log output is not evidence of absence of work.**
+
+**Reliable check** (does not depend on any logger being configured right): look for the
+compiled artifact on disk —
+`<cache_dir>/<cache_key>/compiled.AMD_AIE2P_4x8_CMC_Overlay.xmodel`
+`benchmark.py` now checks for this automatically and prints `<- confirmed on NPU`.
+
+---
+
+### Changes to `src/benchmark.py`
+- provider options -> snake_case (`cache_dir`, `cache_key`)
+- added `log_level` provider option (VitisAI's glog)
+- added `--verbose` flag (turns on both loggers; needs a fresh cache to show the op table)
+- added `--cache-key` so models don't collide in the cache
+- auto-verifies the compiled `.xmodel` artifact and warns if missing
+
+### Note on reruns
+All benchmarks re-run after the fix; results agree with the originals within ~1%
+(ResNet NPU 1.484 -> 1.481 ms; YOLO NPU 34.30 -> 34.08 ms). The NPU numbers were valid
+all along. Reproducibility confirmed.
+
+### Next
+- [x] Re-run CPU baselines with --runs 50 (FP32 CPU swung 149.8 -> 123.7 ms; too noisy)
+- [ ] BF16 quantization -> three-way comparison (speed vs accuracy tradeoff)
+- [ ] Webcam/image demo (own Linux inference script + postprocess decode + NMS)
+- [ ] Power measurement via xrt-smi
+- [ ] Stretch: deploy my own PoseRNN (expect partial offload — LSTM ops)

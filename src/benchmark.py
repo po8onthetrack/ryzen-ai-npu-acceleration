@@ -43,7 +43,7 @@ _ORT_TYPE_TO_NP = {
 }
 
 
-def build_providers(ep: str, cache_dir: str, cache_key: str):
+def build_providers(ep: str, cache_dir: str, cache_key: str, verbose: bool):
     """Return the (providers, provider_options) that ONNX Runtime needs.
 
     ep='cpu' -> plain CPU. ep='npu' -> Ryzen AI NPU via the VitisAI EP.
@@ -51,6 +51,10 @@ def build_providers(ep: str, cache_dir: str, cache_key: str):
     NOTE: the exact VitisAI provider_options can differ between Ryzen AI releases.
     If the NPU run errors on the options below, check the options used in the AMD
     example's README/run script for your version and match them here.
+
+    option names are snake_case ('cache_dir', 'cache_key', 'log_level').
+    camelCase keys are silently ignored. 'log_level' controls VitisAI's OWN glog
+    logger — without it, VitisAI compiles and runs on the NPU with no output at all.
     """
     if ep == "cpu":
         return ["CPUExecutionProvider"], [{}]
@@ -112,8 +116,8 @@ def find_npu_artifact(cache_dir, cache_key):
             return f
     return None
 
-def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key):
-    providers, provider_options = build_providers(ep, cache_dir, cache_key)
+def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key, verbose):
+    providers, provider_options = build_providers(ep, cache_dir, cache_key, verbose)
 
     print(f"[info] loading '{model_path}' on {providers[0]} ...")
     sess_options = ort.SessionOptions()
@@ -206,7 +210,7 @@ def main():
     parser.add_argument("--csv", default="results/benchmark.csv", help="output CSV path")
     parser.add_argument("--cache-dir", default="vitisai_cache", help="VitisAI EP cache dir")
     parser.add_argument("--cache-key", default="modelcachekey", help="VitisAI EP cache key")
-    p.add_argument("--verbose", action="store_true",
+    parser.add_argument("--verbose", action="store_true",
                    help="VitisAI + ORT info logging; shows the [Vitis AI EP] "
                         "No. of Operators table. Needs a fresh cache to print.")
     args = parser.parse_args()
