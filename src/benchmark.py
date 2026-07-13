@@ -54,12 +54,18 @@ def build_providers(ep: str, cache_dir: str, cache_key: str):
     """
     if ep == "cpu":
         return ["CPUExecutionProvider"], [{}]
-    elif ep == "npu":
+ 
+    if ep == "npu":
         os.makedirs(cache_dir, exist_ok=True)
-        # Caching the compiled model avoids recompiling on every run.
         return (
             ["VitisAIExecutionProvider"],
-            [{"cacheDir": cache_dir, "cacheKey": cache_key}],
+            [{
+                "cache_dir": os.path.abspath(cache_dir),
+                "cache_key": cache_key,
+                # VitisAI's own logger
+                "log_level": "info" if verbose else "warning",
+                "enable_cache_file_io_in_mem": "0",
+            }],
         )
     else:
         raise ValueError(f"--ep must be 'cpu' or 'npu', got {ep!r}")
@@ -96,20 +102,44 @@ def make_dummy_inputs(session, batch: int):
         feed[inp.name] = data
     return feed
 
+def find_npu_artifact(cache_dir, cache_key):
+    """Proof the NPU actually compiled the model."""
+    key_dir = os.path.join(cache_dir, cache_key)
+    if not os.path.isdir(key_dir):
+        return None
+    for f in os.listdir(key_dir):
+        if f.startswith("compiled.") and f.endswith(".xmodel"):
+            return f
+    return None
 
 def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key):
     providers, provider_options = build_providers(ep, cache_dir, cache_key)
 
     print(f"[info] loading '{model_path}' on {providers[0]} ...")
-    # For the NPU, model compilation happens here / on the first run — expect a wait.
+    sess_options = ort.SessionOptions()
+    # ORT's logger. Does NOT control VitisAI's logs (gotcha #2).
+    sess_options.log_severity_level = 1 if verbose else 3
+ 
+    # NPU: compilation happens here or on the first run — expect a wait.
     session = ort.InferenceSession(
-        model_path, providers=providers, provider_options=provider_options
-    )#ONNX runtime parses the data
-
-    # Confirm which provider actually got used (VitisAI may fall back to CPU
-    # for unsupported ops — good to see).
+        model_path,
+        sess_options=sess_options,
+        providers=providers,
+        provider_options=provider_options,
+    )
+ 
+    # CAUTION: this only says the provider is REGISTERED, not that it took any nodes.
     print(f"[info] providers active: {session.get_providers()}")
-
+ 
+    if ep == "npu":
+        artifact = find_npu_artifact(cache_dir, cache_key)
+        if artifact:
+            print(f"[info] NPU compile artifact: {cache_key}/{artifact}  <- confirmed on NPU")
+        else:
+            print("[WARN] No compiled .xmodel in cache. Either it loaded from an existing\n"
+                  "       cache, or the model did NOT offload to the NPU. To check:\n"
+                  "       rm -rf {} && re-run with --verbose".format(cache_dir))
+ 
     feed = make_dummy_inputs(session, batch)
 
     # Warmup: run and discard. critical for the NPU (first run compiles).
@@ -186,6 +216,7 @@ def main():
         batch=args.batch,
         cache_dir=args.cache_dir,
         cache_key=args.cache_key,
+        verbose=args.verbose,
     )
     append_csv(row, args.csv)
 
