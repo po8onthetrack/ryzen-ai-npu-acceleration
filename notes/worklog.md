@@ -67,8 +67,10 @@ Target: 163M. torchvision then finds and extracts the tarball — no re-download
 | Config     | Latency  | Throughput   | vs FP32 CPU |
 |------------|----------|--------------|-------------|
 | FP32, CPU  | 123.7 ms | 8.08 inf/s   | 1.0x        |
-| INT8, CPU  | 166.3 ms | 6.01 inf/s   | 0.74x (slower!) |
+| INT8, CPU  | 166.3 ms | 6.01 inf/s   | 0.74x (slower) |
 | INT8, NPU  | 34.1 ms  | 29.34 inf/s  | **3.6x**    |
+| BF16, NPU  | 66.37 ms  | 15.07 inf/s  | **1.86x**    |
+| BF16, CPU  | 247.0 ms  | 4.05 inf/s  | 0.5x(slower)    |
 
 NPU offload: **1237 / 1262 ops (98%)**; 18 CPU + 7 VITIS_EP_CPU = 25 ops on CPU
 (the excluded detection head). Compare ResNet: 398/400 (99.5%), only 2 CPU ops.
@@ -155,7 +157,7 @@ all along. Reproducibility confirmed.
 
 ### Next
 - [x] Re-run CPU baselines with --runs 50 (FP32 CPU swung 149.8 -> 123.7 ms; too noisy)
-- [ ] BF16 quantization -> three-way comparison (speed vs accuracy tradeoff)
+- [x] BF16 quantization -> three-way comparison (speed vs accuracy tradeoff)
 - [ ] Webcam/image demo (own Linux inference script + postprocess decode + NMS)
 - [ ] Power measurement via xrt-smi
 - [ ] Stretch: deploy my own PoseRNN (expect partial offload — LSTM ops)
