@@ -12,3 +12,5 @@ timestamp,model,provider,runs,warmup,batch,mean_ms,median_ms,p95_ms,throughput_i
 2026-07-13T14:42:12,yolov8m.onnx,CPU,10,2,1,123.715,124.003,124.597,8.08,
 2026-07-13T14:52:01,yolov8m.onnx,CPU,50,5,1,132.335,128.7,147.983,7.56,
 2026-07-13T14:52:11,yolov8m_XINT8.onnx,CPU,50,5,1,169.646,169.761,172.222,5.89,
+2026-07-13T15:38:02,yolov8m_BF16.onnx,NPU,20,3,1,66.373,66.866,68.224,15.07,
+2026-07-13T15:55:10,yolov8m_BF16.onnx,CPU,20,3,1,247.001,242.95,258.07,4.05,
