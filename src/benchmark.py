@@ -11,13 +11,13 @@ Typical use (on ws007, venv active + XRT sourced):
 
 Each run appends one row to results/benchmark.csv so numbers accumulate.
 
-Why the pieces exist (so you can defend this, not just run it):
-  * warmup      -> the FIRST NPU inference COMPILES the model and is very slow;
-                   early runs aren't representative. We run a few and discard them.
-  * random input-> for SPEED we only need correctly-shaped data, not real images.
+Why the pieces exist:
+  * warmup      -> the FIRST NPU inference compiles the model and is very slow;
+                   early runs aren't representative. run a few and discard them.
+  * random input-> for speed we only need correctly-shaped data, not real images.
                    (Accuracy is a separate check.) Shape is read from the model.
-  * provider    -> 'CPUExecutionProvider' vs 'VitisAIExecutionProvider' is the ONLY
-                   real difference between a CPU run and an NPU run.
+  * provider    -> 'CPUExecutionProvider' vs 'VitisAIExecutionProvider' is the only
+                    difference between a CPU run and an NPU run.
 """
 
 import argparse
@@ -31,7 +31,7 @@ import numpy as np
 import onnxruntime as ort
 
 
-# Map ONNX tensor type strings -> numpy dtypes, so we can build matching input.
+# map onnx tensor type strings to numpy dtypes, so we can build matching input.
 _ORT_TYPE_TO_NP = {
     "tensor(float)": np.float32,
     "tensor(float16)": np.float16,
@@ -112,7 +112,7 @@ def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key):
 
     feed = make_dummy_inputs(session, batch)
 
-    # Warmup: run and DISCARD. Critical for the NPU (first run compiles).
+    # Warmup: run and discard. critical for the NPU (first run compiles).
     print(f"[info] warmup: {warmup} run(s) (discarded)")
     for _ in range(warmup):
         session.run(None, feed)
