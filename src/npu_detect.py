@@ -57,10 +57,18 @@ INPUT_SIZE = 640
 
 # session touches NPU
 
-def build_session(model_path, ep, cache_dir, cache_key, verbose=False):
+def build_session(model_path, ep, cache_dir, cache_key, verbose=False, threads=None, no_spin=False):
     """Create the ONNX Runtime session on CPU or on the NPU (VitisAI EP)."""
     sess_options = ort.SessionOptions()
     sess_options.log_severity_level = 1 if verbose else 3   # ORT's logger
+
+    if threads is not None:
+        sess_options.intra_op_num_threads = threads
+        print(f"[info] intra_op_num_threads = {threads}")
+    if no_spin:
+        sess_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        sess_options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+        print("[info] allow_spinning = 0")
 
     if ep == "cpu":
         providers = ["CPUExecutionProvider"]
@@ -211,14 +219,21 @@ def main():
     p.add_argument("--cache-key", default="yolo_detect",
                    help="use a DIFFERENT key per model, or the old compile is reused")
     p.add_argument("--verbose", action="store_true")
+    p.add_argument("--threads", type=int, default=1,
+                   help="intra_op_num_threads. Default 1: the NPU does the math, so "
+                        "extra CPU threads only busy-wait (30%% slower, ~80x more CPU). "
+                        "Use --threads 0 to let ORT decide (its default).")
+    p.add_argument("--no-spin", action="store_true",
+                   help="disable ORT thread-pool busy-waiting (redundant if threads=1)")
     args = p.parse_args()
 
     image = cv2.imread(args.image)
     if image is None:
         raise FileNotFoundError(f"could not read image: {args.image}")
 
-    session = build_session(args.model, args.ep, args.cache_dir,
-                            args.cache_key, args.verbose)
+    threads = None if args.threads == 0 else args.threads
+    session = build_session(args.model, args.ep, args.cache_dir, args.cache_key,
+                            args.verbose, threads=threads, no_spin=args.no_spin)
     input_name = session.get_inputs()[0].name
 
     # preprocess (CPU)
