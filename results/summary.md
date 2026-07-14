@@ -22,3 +22,32 @@ the NPU under 2%.
 | NPU      | 1.48 ms | 675.2 inf/s  | **6.2×**|
 
 NPU offload: 398/400 ops (99.5%); 2 ops on CPU.
+
+
+## Detection correctness — CPU vs NPU (yolov8m_XINT8, test_image.jpg)
+
+Both produce **identical detections**: same 18 objects, same labels, same
+confidences to 2 d.p., same box coordinates.
+
+=> The NPU is numerically equivalent to the CPU for the same quantized model.
+   Accuracy loss comes from quantization (FP32→INT8), NOT from running on the NPU.
+
+| Stage           | CPU      | NPU     | Speedup |
+|-----------------|----------|---------|---------|
+| Inference       | 217.5 ms | 34.7 ms | 6.3×    |
+| Decode + NMS    | 13.2 ms  | 19.8 ms | (CPU-bound in both) |
+| **End-to-end**  | 230.7 ms | 54.5 ms | **4.2×**|
+
+Note: decode+NMS is unaccelerated . It's 6% of the CPU pipeline but 36% of the NPU pipeline 
+
+## The exclusion experiment 
+
+| Model                        | Detections | Image                      |
+|------------------------------|------------|----------------------------|
+| INT8, no exclusion           | **0**      | results/detect_no_exclude.jpg |
+| INT8, head excluded          | **18**     | results/detect_int8_npu.jpg   |
+
+Identical model, quantizer, hardware, and input. The only difference is
+`--exclude_subgraphs "[/model.22/Concat_3], [/model.22/Concat_10]]"`.
+
+Naive INT8 quantization of YOLOv8m produces a model that detects nothing.

@@ -51,7 +51,7 @@ echo $RYZEN_AI_INSTALLATION_PATH   # should print a path
 
 ```bash
 source ~/ryzenai/venv/bin/activate     # Ryzen AI Python env
-source /opt/xilinx/xrt/setup.sh        # XRT runtime — REQUIRED for NPU execution
+source /opt/xilinx/xrt/setup.sh        # XRT runtime — required for NPU execution
 ```
 
 The XRT source was added to `~/.bashrc` so it happens automatically on login.
@@ -72,12 +72,3 @@ Setting environment for STX/KRK
 Session successfully initialized.
 Test Finished
 ```
-
-## Status
-
-- [x] Driver / XRT verified (pre-installed)
-- [x] Ryzen AI Software 1.7.1 installed to `~/ryzenai/venv`
-- [x] quicktest passed on Strix NPU ("Test Finished")
-- [ ] ResNet getting-started example (CPU vs NPU)
-- [ ] YOLOv8n deployed on NPU
-- [ ] CPU-vs-NPU benchmark harness
