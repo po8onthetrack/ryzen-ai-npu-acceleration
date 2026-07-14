@@ -116,13 +116,22 @@ def find_npu_artifact(cache_dir, cache_key):
             return f
     return None
 
-def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key, verbose):
+def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key, verbose,no_spin=False, threads=None):
     providers, provider_options = build_providers(ep, cache_dir, cache_key, verbose)
 
     print(f"[info] loading '{model_path}' on {providers[0]} ...")
     sess_options = ort.SessionOptions()
     # ORT's logger. Does NOT control VitisAI's logs (gotcha #2).
     sess_options.log_severity_level = 1 if verbose else 3
+
+    if no_spin:
+        sess_options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        sess_options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+        print("[info] allow_spinning = 0 (thread pools sleep instead of busy-waiting)")
+
+    if threads is not None:
+        sess_options.intra_op_num_threads = threads
+        print(f"[info] intra_op_num_threads = {threads}")
  
     # NPU: compilation happens here or on the first run — expect a wait.
     session = ort.InferenceSession(
@@ -180,6 +189,9 @@ def run_benchmark(model_path, ep, runs, warmup, batch, cache_dir, cache_key, ver
         "runs": runs,
         "warmup": warmup,
         "batch": batch,
+        # measure efficiency 
+        "no_spin": no_spin,                                  
+        "threads": threads if threads is not None else "",   
         "mean_ms": round(mean_ms, 3),
         "median_ms": round(median_ms, 3),
         "p95_ms": round(p95_ms, 3),
@@ -213,6 +225,12 @@ def main():
     parser.add_argument("--verbose", action="store_true",
                    help="VitisAI + ORT info logging; shows the [Vitis AI EP] "
                         "No. of Operators table. Needs a fresh cache to print.")
+    parser.add_argument("--no-spin", action="store_true",
+                   help="disable ORT thread-pool busy-waiting (allow_spinning=0). "
+                        "ORT worker threads spin at 100%% CPU while waiting on the NPU; "
+                        "this should free the cores at no cost to latency.")
+    parser.add_argument("--threads", type=int, default=None,
+                   help="intra_op_num_threads (e.g. 1). Fewer threads = fewer spinners.")
     args = parser.parse_args()
 
     row = run_benchmark(
@@ -224,6 +242,8 @@ def main():
         cache_dir=args.cache_dir,
         cache_key=args.cache_key,
         verbose=args.verbose,
+        no_spin=args.no_spin,        
+        threads=args.threads,
     )
     append_csv(row, args.csv)
 
