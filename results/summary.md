@@ -51,3 +51,30 @@ Identical model, quantizer, hardware, and input. The only difference is
 `--exclude_subgraphs "[/model.22/Concat_3], [/model.22/Concat_10]]"`.
 
 Naive INT8 quantization of YOLOv8m produces a model that detects nothing.
+
+## Own test images — CPU/NPU equivalence generalizes
+
+Two photos of my own (a dinner table, a street scene), run through `npu_detect.py`
+on both providers with `yolov8m_XINT8`.
+
+**Detections are identical on CPU and NPU** — same objects, same labels, same
+confidences to 2 d.p., same box coordinates. This holds on real-world photos, not
+just AMD's curated test image.
+
+| Image     | Detections | CPU inference | NPU inference | Speedup |
+|-----------|------------|---------------|---------------|---------|
+| sample1 (dining table, 4285×5712) | 14 | 218.1 ms | 44.3 ms | 4.9× |
+| sample2 (street scene, 1201×648)  | 19 | 331.7 ms | 30.7 ms | 10.8× |
+| test_image (AMD, 640×427)         | 18 | 217.5 ms | 34.7 ms | 6.3× |
+
+### Decode+NMS is CPU-bound and scales with detection count / image size
+
+| Image     | NPU inference | Decode+NMS (NPU run) | Decode share |
+|-----------|---------------|----------------------|--------------|
+| sample1   | 44.3 ms       | 37.2 ms              | 46%      |
+| sample2   | 30.7 ms       | 20.7 ms              | 40%      |
+| test_image| 34.7 ms       | 19.8 ms              | 36%      |
+
+The decode is a Python loop over 8400 candidates plus NMS — it runs on the CPU and
+does not benefit from the NPU. On the CPU runs it costs only ~13 ms (6% of the
+pipeline); on the NPU runs it is 36–46% of total time.
