@@ -180,15 +180,21 @@ def decode(raw_output, scale, conf_threshold=0.25, nms_threshold=0.45):
 
 
 # draw
-
 def draw(image, detections):
+    h, w = image.shape[:2]
+    # scale relative to a 640px reference; clamp so it stays sane on tiny/huge images
+    s = max(w, h) / 640.0
+    font_scale = max(0.5, 0.5 * s)
+    thickness  = max(2, int(2 * s))
+    box_thick  = max(2, int(2 * s))
+
     for d in detections:
         x1, y1, x2, y2 = d["box"]
         color = COLORS[d["class_id"]]
-        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, box_thick)
         text = f'{d["label"]} ({d["confidence"]:.2f})'
-        cv2.putText(image, text, (x1, max(15, y1 - 8)),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        cv2.putText(image, text, (x1, max(int(15 * s), y1 - int(8 * s))),
+                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness)
     return image
 
 
