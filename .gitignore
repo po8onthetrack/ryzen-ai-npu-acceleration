@@ -5,7 +5,6 @@
 *.pb
 *.tflite
 *.xmodel
-models/*
 !models/.gitkeep
 !models/*.py
 !models/*.sh
