@@ -20,7 +20,7 @@
 **Issue 1 — torch version conflict (benign, verified)**
 The example's `requirements.txt` forces `torch 2.5.1+cpu` → `2.8.0`, breaking flexml's pin:
 ```
-flexml 1.7.1 requires torch==2.5.1+cpu, but you have torch 2.8.0 which is incompatible.
+flexml 1.7.1 requires torch==2.5.1+cpu, but I have torch 2.8.0 which is incompatible.
 ```
 Verified it still works anyway: `VitisAIExecutionProvider` present, quicktest → `Test Finished`.
 → Cosmetic. **If the NPU misbehaves later, suspect this first.**
@@ -158,6 +158,82 @@ all along. Reproducibility confirmed.
 ### Next
 - [x] Re-run CPU baselines with --runs 50 (FP32 CPU swung 149.8 -> 123.7 ms; too noisy)
 - [x] BF16 quantization -> three-way comparison (speed vs accuracy tradeoff)
-- [ ] Webcam/image demo (own Linux inference script + postprocess decode + NMS)
-- [ ] Power measurement via xrt-smi
+- [x] image demo (own Linux inference script + postprocess decode + NMS)
+- [x] Power measurement via xrt-smi
 - [ ] Stretch: deploy my own PoseRNN (expect partial offload — LSTM ops)
+
+
+## 2026-07-14 — own linux inference path, real-image testing, and the threading finding
+
+Goal: build a linux yolo inference script (amd's is windows-only), test it on my own
+images, and measure efficiency.
+
+### Added src/npu_detect.py
+
+My own linux inference path: preprocess → onnx runtime/vitisai on npu → decode + nms →
+draw boxes. It verifies the compiled .xmodel artifact rather than trusting
+get_providers(), which only tells you the provider was registered, not that it took any
+nodes. Preprocess and decode follow ultralytics' yolov8-opencv-onnx-python reference;
+the only change is swapping their cv2.dnn inference for the npu session.
+
+### Cpu and npu are numerically identical
+
+On amd's test image and on two photos of my own, cpu and npu produce the same
+detections — same objects, same labels, same confidences to two decimals, same box
+coordinates. So accuracy loss comes from quantization (fp32 → int8), not from where the
+model runs. That distinction matters and is easy to conflate.
+
+### Decode and nms are cpu-bound
+
+| image | npu inference | decode + nms | decode share |
+|---|---|---|---|
+| sample1 (4285×5712) | 44.3 ms | 37.2 ms | 46% |
+| sample2 (1201×648) | 30.7 ms | 20.7 ms | 40% |
+| amd test image | 34.7 ms | 19.8 ms | 36% |
+
+The same decode costs only ~13 ms on the cpu runs — about 6% of that pipeline. Once the
+network is 5–10× faster, the post-processing we did not accelerate becomes the dominant
+cost. Vectorising the decode (currently a per-candidate python loop over 8400
+candidates) is the obvious next lever.
+
+### Finding: ort's thread defaults waste ~20 cores on the npu, and are 30% slower
+
+Noticed the npu run was pinning ~2000% cpu (roughly 20 cores) — the same occupancy as
+running the model on the cpu outright. But the npu does the math, so those threads have
+nothing to do. They busy-wait, because ort sets allow_spinning: 1 by default.
+
+| config | latency | cpu |
+|---|---|---|
+| default | 36.6 ms | ~2000% |
+| allow_spinning = 0 | 26.9 ms | ~49% |
+| intra_op_num_threads = 1 | **25.7 ms** | **~25%** |
+
+Thread count is the real fix: with one thread the workers are never created. Disabling
+spinning is only partial — the workers still exist, they just sleep. Combining both adds
+nothing (25.6 ms, ~25%).
+
+The symmetry is the interesting part. The same setting **helps the cpu by 3.6×**
+(607 → 168 ms, because those threads do real parallel work) and **hurts the npu by 1.4×**
+(25.7 → 36.6 ms, because they only spin). ORT's thread-pool options are documented as general performance knobs, but neither 
+ORT's NPU guidance nor AMD's Ryzen AI examples set them — all of AMD's example scripts run with the defaults, which on this 
+hardware cost ~30% latency and saturate ~20 cores doing nothing.
+
+Revised headline: yolov8m int8 on npu = **25.7 ms / 39.0 inf/s = 5.2× vs fp32 cpu**
+(it was 3.9× with the default thread config).
+
+### Power measurement — blocked
+
+- `xrt-smi examine` reports `Estimated Power: N/A`. The npu exposes no power telemetry.
+- Rapl energy counters (`/sys/class/powercap/.../energy_uj`) are root-only, and I have
+  no sudo on this shared machine.
+
+So I used **cpu occupancy** as the efficiency proxy instead. Arguably it makes the point
+better than watts would have: 43% more throughput on roughly one-eightieth of the cpu.
+That is the actual argument for an npu — it should do the inference *and* leave the cpu
+free. Misconfigured, it does neither.
+
+### Next
+
+- [ ] plots from benchmark.csv (the precision ladder, and the threading symmetry)
+- [ ] report and slides
+- [ ] stretch: deploy my own posernn (expect partial offload — lstm ops may not be supported)
