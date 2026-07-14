@@ -78,3 +78,70 @@ just AMD's curated test image.
 The decode is a Python loop over 8400 candidates plus NMS — it runs on the CPU and
 does not benefit from the NPU. On the CPU runs it costs only ~13 ms (6% of the
 pipeline); on the NPU runs it is 36–46% of total time.
+
+
+## Thread-pool configuration — 30% faster on ~1/80th the CPU
+
+ONNX Runtime's default thread pool spawns ~24 workers that **busy-wait**
+(`allow_spinning: 1`) while waiting for work. During NPU inference they have nothing
+to do — the NPU does the math — so they spin, saturating ~20 cores and contending with
+the one thread that coordinates with the NPU.
+
+`yolov8m_XINT8`, 500 runs (NPU) / 50 runs (CPU), 5 warmup discarded.
+CPU usage is `top`'s per-process figure (100% = one core; ceiling ~2400% on 24 threads).
+
+| Device | Threads | Spin | Mean | p95 | Throughput | CPU usage |
+|--------|---------|------|------|-----|------------|-----------|
+| NPU | default (~24) | on  | 36.6 ms | 44.1 ms | 27.3 inf/s | **~2000%** (≈20 cores) |
+| NPU | default (~24) | off | 26.9 ms | 31.0 ms | 37.2 inf/s | ~49% (½ core) |
+| NPU | **1** | on  | 25.7 ms | 26.0 ms | 39.0 inf/s | **~25%** (¼ core) |
+| NPU | **1** | off | **25.6 ms** | **25.9 ms** | **39.1 inf/s** | **~25%** |
+| CPU | default (~24) | on | 168.4 ms | 177.9 ms | 5.94 inf/s | ~2000% (≈20 cores) |
+| CPU | 1 | on | 607.5 ms | 608.5 ms | 1.65 inf/s | ~100% (1 core) |
+
+### The symmetry — the same knob, opposite signs
+
+- **CPU: threads help — 3.6× faster** (607.5 → 168.4 ms). The convolutions genuinely
+  parallelize; each core does real work.
+- **NPU: threads hurt — 1.4× slower** (25.7 → 36.6 ms). The NPU does all the math, so
+  those same ~20 cores do nothing but spin, contending with the coordinating thread.
+
+Note the CPU occupancy is **identical (~2000%) in both default cases** — but on the CPU
+that work is real, and on the NPU it is entirely wasted. **With default settings you
+offload the math to the NPU and free nothing.**
+
+### Thread count is the fix; disabling spinning is only a partial one
+
+`allow_spinning=0` stops the workers spinning (26.9 ms, ~49% CPU) but they still exist.
+`intra_op_num_threads=1` means they are **never created** (25.7 ms, ~25% CPU).
+Combining both changes nothing further (25.6 ms, ~25%).
+
+**Recommended NPU config: `intra_op_num_threads = 1`.**
+
+### Efficiency, without a power sensor
+
+NPU power telemetry is unavailable (`xrt-smi`: `Estimated Power: N/A`) and CPU-package
+RAPL counters require root, which I don't have on the shared machine. CPU occupancy is
+the proxy:
+
+| NPU config | Throughput | CPU |
+|---|---|---|
+| default | 27.3 inf/s | ~2000% |
+| `threads=1` | **39.0 inf/s** | **~25%** |
+
+**43% more throughput on ~1/80th of the CPU.** That is the actual argument for an NPU:
+it should do the inference *and* leave the CPU free. Misconfigured, it does neither.
+
+ORT's defaults are correct for CPU inference. Pointed at an NPU, the identical settings
+are pure waste. This is undocumented.
+
+### Revised headline
+
+| Config | Latency | Throughput | vs FP32 CPU |
+|---|---|---|---|
+| FP32, CPU (default threads) | 132.3 ms | 7.56 inf/s | 1.0× |
+| INT8, CPU (default threads) | 168.4 ms | 5.94 inf/s | 0.79× |
+| **INT8, NPU (1 thread)** | **25.7 ms** | **39.0 inf/s** | **5.2×** |
+
+The NPU is also the most stable measurement in the dataset: p95 within 1.2% of the mean
+(26.0 vs 25.7 ms), versus ~7% on the CPU.
