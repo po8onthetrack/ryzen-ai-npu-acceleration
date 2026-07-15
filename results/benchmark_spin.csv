@@ -1,7 +1,7 @@
-timestamp,model,provider,runs,warmup,batch,no_spin,threads,mean_ms,median_ms,p95_ms,throughput_infps,power_w
-2026-07-14T16:27:13,yolov8m_XINT8.onnx,NPU,500,5,1,False,,36.573,35.995,44.119,27.34,
-2026-07-14T16:27:40,yolov8m_XINT8.onnx,NPU,500,5,1,True,,26.902,25.897,30.958,37.17,
-2026-07-14T16:28:14,yolov8m_XINT8.onnx,NPU,500,5,1,False,1,25.674,25.738,25.989,38.95,
-2026-07-14T16:29:10,yolov8m_XINT8.onnx,CPU,50,5,1,False,,168.375,165.938,177.917,5.94,
-2026-07-14T16:30:03,yolov8m_XINT8.onnx,CPU,50,5,1,False,1,607.45,607.432,608.539,1.65,
-2026-07-14T16:52:15,yolov8m_XINT8.onnx,NPU,500,5,1,True,1,25.562,25.601,25.883,39.12,
+timestamp,model,provider,runs,warmup,batch,no_spin,threads,mean_ms,median_ms,p95_ms,throughput_infps
+2026-07-14T16:27:13,yolov8m_XINT8.onnx,NPU,500,5,1,False,,36.573,35.995,44.119,27.34
+2026-07-14T16:27:40,yolov8m_XINT8.onnx,NPU,500,5,1,True,,26.902,25.897,30.958,37.17
+2026-07-14T16:28:14,yolov8m_XINT8.onnx,NPU,500,5,1,False,1,25.674,25.738,25.989,38.95
+2026-07-14T16:29:10,yolov8m_XINT8.onnx,CPU,50,5,1,False,,168.375,165.938,177.917,5.94
+2026-07-14T16:30:03,yolov8m_XINT8.onnx,CPU,50,5,1,False,1,607.45,607.432,608.539,1.65
+2026-07-14T16:52:15,yolov8m_XINT8.onnx,NPU,500,5,1,True,1,25.562,25.601,25.883,39.12
