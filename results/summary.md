@@ -3,20 +3,22 @@
 | Config    | Mean     | Median   | p95      | Throughput  | vs FP32 CPU |
 |-----------|----------|----------|----------|-------------|-------------|
 | FP32, CPU | 132.3 ms | 128.7 ms | 148.0 ms | 7.56 inf/s  | 1.0×        |
-| INT8, CPU | 169.6 ms | 169.8 ms | 172.2 ms | 5.89 inf/s  | 0.78×       |
+| INT8, CPU | 168.4 ms | 169.8 ms | 172.2 ms | 5.89 inf/s  | 0.78×       |
 | BF16, CPU | 247.0 ms | 243.0 ms | 258.1 ms | 4.05 inf/s  | 0.54×       |
 | BF16, NPU | 66.4 ms  | 66.9 ms  | 68.2 ms  | 15.07 inf/s | **2.0×**    |
-| INT8, NPU | 34.1 ms  | 34.0 ms  | 38.0 ms  | 29.34 inf/s | **3.9×**    |
-| **INT8, NPU (1 thread, spin off)** | **25.6 ms** | **25.6**|**25.9**|**39.0 inf/s** | **5.2×** |
+| INT8, NPU(default threads) | 34.1 ms  | 34.0 ms  | 38.0 ms  | 29.34 inf/s | **3.9×**    |
+| **INT8, NPU (1 thread, spin off)** | **25.6 ms** | **25.6 ms**|**25.9 ms**|**39.0 inf/s** | **5.2×** |
 
-The NPU is also the most stable measurement in the dataset: p95 within 1.2% of the mean
-(26.0 vs 25.7 ms), versus ~7% on the CPU.
+The last row is the correct NPU configuration (see **Thread-pool** section). The 34.1 ms
+row uses ONNX Runtime's default thread pool, which busy-waits ~20 cores and is 30%
+slower — kept here for comparison.
+
+The 1 thread NPU is also the most stable measurement in the dataset: p95 within 1.2% of the mean
+(25.9 vs 25.6 ms), versus ~7% on the CPU.
 
 NPU offload — INT8: 1237/1262 ops (98%), 25 on CPU (excluded detection head).
               BF16:  925/925 ops (100%), none on CPU (no exclusion needed).
 
-Note: the NPU is also far more consistent — CPU FP32 shows ~15% run-to-run variance,
-the NPU under 2%.
 
 ## ResNet (CIFAR-10, 32×32) — INT8
 
@@ -42,6 +44,8 @@ confidences to 2 d.p., same box coordinates.
 | Decode + NMS    | 13.2 ms  | 19.8 ms | (CPU-bound in both) |
 | **End-to-end**  | 230.7 ms | 54.5 ms | **4.2×**|
 
+(These NPU inference figures use the default thread config; the tuned config is
+faster still — see **Thread-pool** section.)
 Note: decode+NMS is unaccelerated . It's 6% of the CPU pipeline but 36% of the NPU pipeline 
 
 ## The exclusion experiment 
@@ -55,6 +59,9 @@ Identical model, quantizer, hardware, and input. The only difference is
 `--exclude_subgraphs "[/model.22/Concat_3], [/model.22/Concat_10]]"`.
 
 Naive INT8 quantization of YOLOv8m produces a model that detects nothing.
+Because the detection head concatenates box coords (0-640) with confidences (0-1) into one tensor;
+INT8's single per-tensor scale must cover 640, so every confidence rounds to zero and
+nothing clears the 0.25 threshold.
 
 ## Own test images — CPU/NPU equivalence generalizes
 
@@ -69,7 +76,8 @@ just AMD's curated test image.
 |-----------|------------|---------------|---------------|---------|
 | sample1 (dining table, 4285×5712) | 14 | 218.1 ms | 44.3 ms | 4.9× |
 | sample2 (street scene, 1201×648)  | 19 | 331.7 ms | 30.7 ms | 10.8× |
-| test_image (AMD, 640×427)         | 18 | 217.5 ms | 34.7 ms | 6.3× |
+
+(NPU inference here is the default thread config.)
 
 ### Decode+NMS is CPU-bound and scales with detection count / image size
 
@@ -77,11 +85,10 @@ just AMD's curated test image.
 |-----------|---------------|----------------------|--------------|
 | sample1   | 44.3 ms       | 37.2 ms              | 46%      |
 | sample2   | 30.7 ms       | 20.7 ms              | 40%      |
-| test_image| 34.7 ms       | 19.8 ms              | 36%      |
 
 The decode is a Python loop over 8400 candidates plus NMS — it runs on the CPU and
 does not benefit from the NPU. On the CPU runs it costs only ~13 ms (6% of the
-pipeline); on the NPU runs it is 36–46% of total time.
+pipeline); on the NPU runs it is ~45% of total time.
 
 
 ## Thread-pool configuration — 30% faster on ~1/80th the CPU
