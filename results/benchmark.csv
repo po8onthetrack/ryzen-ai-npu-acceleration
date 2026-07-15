@@ -1,4 +1,4 @@
-timestamp,model,provider,runs,warmup,batch,mean_ms,median_ms,p95_ms,throughput_infps,power_w
+timestamp,model,provider,runs,warmup,batch,mean_ms,median_ms,p95_ms,throughput_infps
 2026-07-12T19:14:10,resnet_quantized.onnx,CPU,100,5,1,9.26,9.304,9.851,107.99,
 2026-07-12T19:14:14,resnet_quantized.onnx,NPU,100,5,1,1.484,1.481,1.507,674.02,
 2026-07-13T13:51:48,yolov8m_XINT8.onnx,NPU,20,3,1,34.3,33.997,37.289,29.15,
