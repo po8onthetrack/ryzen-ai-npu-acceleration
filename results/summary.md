@@ -1,3 +1,12 @@
+## ResNet (CIFAR-10, 32×32) — INT8
+
+| Provider | Mean    | Throughput   | Speedup |
+|----------|---------|--------------|---------|
+| CPU      | 9.13 ms | 109.5 inf/s  | 1.0×    |
+| NPU      | 1.48 ms | 675.2 inf/s  | **6.2×**|
+
+NPU offload: 398/400 ops (99.5%); 2 ops on CPU.
+
 ## YOLOv8m (COCO, 640×640) — Ryzen AI 9 HX 370 (XDNA2)
 
 | Config    | Mean     | Median   | p95      | Throughput  | vs FP32 CPU |
@@ -18,17 +27,6 @@ The 1 thread NPU is also the most stable measurement in the dataset: p95 within 
 
 NPU offload — INT8: 1237/1262 ops (98%), 25 on CPU (excluded detection head).
               BF16:  925/925 ops (100%), none on CPU (no exclusion needed).
-
-
-## ResNet (CIFAR-10, 32×32) — INT8
-
-| Provider | Mean    | Throughput   | Speedup |
-|----------|---------|--------------|---------|
-| CPU      | 9.13 ms | 109.5 inf/s  | 1.0×    |
-| NPU      | 1.48 ms | 675.2 inf/s  | **6.2×**|
-
-NPU offload: 398/400 ops (99.5%); 2 ops on CPU.
-
 
 ## Detection correctness — CPU vs NPU (yolov8m_XINT8, test_image.jpg)
 
