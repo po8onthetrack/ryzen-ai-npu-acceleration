@@ -7,6 +7,10 @@
 | BF16, CPU | 247.0 ms | 243.0 ms | 258.1 ms | 4.05 inf/s  | 0.54×       |
 | BF16, NPU | 66.4 ms  | 66.9 ms  | 68.2 ms  | 15.07 inf/s | **2.0×**    |
 | INT8, NPU | 34.1 ms  | 34.0 ms  | 38.0 ms  | 29.34 inf/s | **3.9×**    |
+| **INT8, NPU (1 thread, spin off)** | **25.6 ms** | **25.6**|**25.9**|**39.0 inf/s** | **5.2×** |
+
+The NPU is also the most stable measurement in the dataset: p95 within 1.2% of the mean
+(26.0 vs 25.7 ms), versus ~7% on the CPU.
 
 NPU offload — INT8: 1237/1262 ops (98%), 25 on CPU (excluded detection head).
               BF16:  925/925 ops (100%), none on CPU (no exclusion needed).
@@ -134,14 +138,3 @@ it should do the inference *and* leave the CPU free. Misconfigured, it does neit
 
 ORT's defaults are correct for CPU inference. Pointed at an NPU, the identical settings
 are pure waste. This is undocumented.
-
-### Revised headline
-
-| Config | Latency | Throughput | vs FP32 CPU |
-|---|---|---|---|
-| FP32, CPU (default threads) | 132.3 ms | 7.56 inf/s | 1.0× |
-| INT8, CPU (default threads) | 168.4 ms | 5.94 inf/s | 0.79× |
-| **INT8, NPU (1 thread)** | **25.7 ms** | **39.0 inf/s** | **5.2×** |
-
-The NPU is also the most stable measurement in the dataset: p95 within 1.2% of the mean
-(26.0 vs 25.7 ms), versus ~7% on the CPU.
