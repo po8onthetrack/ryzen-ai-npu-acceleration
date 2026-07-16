@@ -114,7 +114,7 @@ def plot_threading_symmetry():
 # Threading efficiency — CPU occupancy per NPU config (the "power" proxy)
 def plot_threading_efficiency():
     rows = [
-        ("default\n(~24 threads)", 36.6, 2000),
+        ("default\n(~24 threads)", 36.6, 1800),
         ("allow_spinning=0", 26.9, 49),
         ("threads=1", 25.7, 25),
     ]
