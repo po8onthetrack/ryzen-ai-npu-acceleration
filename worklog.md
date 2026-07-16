@@ -244,3 +244,20 @@ Went through the whole summary for internal consistency
 Drafted a report form these aspects: the task framing, the pipeline, the authoritative numbers, the four findings
 with their mechanisms, the engineering traps, and the limitations. 
 
+## 2026-07-16 — corrected occupancy numbers, warmup check, report
+
+### Corrected CPU occupancy figures
+Re-measured cpu usage: CPU default ~2400% (all 24 threads), NPU default ~1800%
+(~18 threads spinning), NPU threads=1 ~25%. Earlier "~2000%" were rounded
+placeholders. Efficiency ratio is now ~70× (1800/25), not ~80×. Updated summary.md,
+and the plot. Latency figures unchanged.
+
+### Warmup check
+--warmup 0 gave the same mean/median/p95 as warmup=5. Reason: the .xmodel was already
+cached (no compile to absorb), and vitisai compiles during session creation, not inside
+the timed run(). So warmup barely matters on a warm cache but is essential on a cold one.
+Kept it in as correct practice.
+
+### Report
+Corrected the occupancy numbers, tightened the git-lfs / slow-download and torch-conflict
+paragraphs, polished the report
