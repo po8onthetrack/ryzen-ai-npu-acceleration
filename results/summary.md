@@ -101,11 +101,11 @@ CPU usage is `top`'s per-process figure (100% = one core; ceiling ~2400% on 24 t
 
 | Device | Threads | Spin | Mean | p95 | Throughput | CPU usage |
 |--------|---------|------|------|-----|------------|-----------|
-| NPU | default (~24) | on  | 36.6 ms | 44.1 ms | 27.3 inf/s | **~2000%** (≈20 cores) |
+| NPU | default (~24) | on  | 36.6 ms | 44.1 ms | 27.3 inf/s | **~1800%** (≈18 cores) |
 | NPU | default (~24) | off | 26.9 ms | 31.0 ms | 37.2 inf/s | ~49% (½ core) |
 | NPU | **1** | on  | 25.7 ms | 26.0 ms | 39.0 inf/s | **~25%** (¼ core) |
 | NPU | **1** | off | **25.6 ms** | **25.9 ms** | **39.1 inf/s** | **~25%** |
-| CPU | default (~24) | on | 168.4 ms | 177.9 ms | 5.94 inf/s | ~2000% (≈20 cores) |
+| CPU | default (~24) | on | 168.4 ms | 177.9 ms | 5.94 inf/s | ~2400% (≈24 cores) |
 | CPU | 1 | on | 607.5 ms | 608.5 ms | 1.65 inf/s | ~100% (1 core) |
 
 ### The symmetry — the same knob, opposite signs
