@@ -261,3 +261,24 @@ Kept it in as correct practice.
 ### Report
 Corrected the occupancy numbers, tightened the git-lfs / slow-download and torch-conflict
 paragraphs, polished the report
+
+## 2026-07-17 — decode optimization
+
+### Added src/decode_vectorized.py
+Keeps both decode_loop() (original python loop) and decode_vectorized() (numpy) plus a
+compare() harness that checks identical output and times both. npu_detect.py now uses the
+fast version.
+
+### The fix
+Replaced the python loop over 8400 candidates with numpy array ops (argmax/max/mask over the
+whole [8400,84] tensor). Removes per-candidate interpreter overhead; runs in one compiled C
+pass. NMS unchanged.
+
+### Result (real image, 18 detections)
+decode+NMS 19.8 -> 1.3 ms (~15x), output identical. End-to-end (25.6 ms inference + decode)
+~45 -> ~27 ms; ~22 -> ~37 inf/s. Decode drops from ~44% of the pipeline to ~5%.
+
+New finding: a first test on random data showed only 1.8x — random data yields ~1519 fake
+detections, so unchanged NMS dominated both and hid the win. Benchmark post-processing on
+realistic detection counts, not random tensors.
+
