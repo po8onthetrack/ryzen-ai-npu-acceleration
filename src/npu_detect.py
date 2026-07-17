@@ -143,45 +143,57 @@ def decode(raw_output, scale, conf_threshold=0.25, nms_threshold=0.45):
       * 8400 = candidate detections (a prediction at every grid cell, at 3 scales)
       * 84   = 4 box coords (cx, cy, w, h) + 80 class scores.  4 + 80 = 84.
 
-    Most candidates are junk. Four steps turn this into usable boxes.
+    Vectorized: the per-candidate work (best class, best score, confidence filter) is
+    done on the whole [8400, 84] array at once with numpy, instead of a Python loop.
+    numpy runs it in compiled, contiguous, SIMD-capable C, eliminating the per-element
+    interpreter overhead that dominated the loop version.
     """
-    # transpose
-    outputs = np.squeeze(raw_output, axis=0).T          # [8400, 84]
+    # transpose: [1,84,8400] -> [8400,84], each row one candidate
+    outputs = np.squeeze(raw_output, axis=0).T
 
-    boxes, scores, class_ids = [], [], []
+    box_params = outputs[:, :4]          # [8400, 4]  (cx, cy, w, h)
+    class_scores = outputs[:, 4:]        # [8400, 80]
 
-    # pick the best class
-    for row in outputs:
-        classes_scores = row[4:]                        # the 80 class scores
-        class_id = int(np.argmax(classes_scores))       # which class is most likely
-        max_score = float(classes_scores[class_id])     # how confident
+    # best class and its score for EVERY candidate at once (no loop)
+    class_ids_all = class_scores.argmax(axis=1)      # [8400]
+    max_scores_all = class_scores.max(axis=1)        # [8400]
 
-        if max_score >= conf_threshold:
-            cx, cy, w, h = row[0], row[1], row[2], row[3]
-            # convert centre-form -> top-left form, which is what NMS wants
-            boxes.append([cx - 0.5 * w, cy - 0.5 * h, w, h])
-            scores.append(max_score)
-            class_ids.append(class_id)
-
-    if not boxes:
+    # confidence filter as a single boolean mask
+    keep = max_scores_all >= conf_threshold
+    if not np.any(keep):
         return []
 
-    # Non-Maximum Suppression
-    keep = cv2.dnn.NMSBoxes(boxes, scores, conf_threshold, nms_threshold, 0.5)
-    if len(keep) == 0:
+    cx = box_params[keep, 0]
+    cy = box_params[keep, 1]
+    w = box_params[keep, 2]
+    h = box_params[keep, 3]
+
+    # centre-form -> top-left form (what NMS wants), vectorized -> [M, 4]
+    boxes = np.stack([cx - 0.5 * w, cy - 0.5 * h, w, h], axis=1)
+    scores = max_scores_all[keep]
+    class_ids = class_ids_all[keep]
+
+    # NMS wants Python lists; convert only the survivors (a few, not 8400)
+    boxes_l = boxes.tolist()
+    scores_l = scores.tolist()
+    class_ids_l = class_ids.tolist()
+
+    nms_keep = cv2.dnn.NMSBoxes(boxes_l, scores_l, conf_threshold, nms_threshold, 0.5)
+    if len(nms_keep) == 0:
         return []
 
-   # land the coords on original image
+    # land the coords on the original image
     detections = []
-    for i in np.array(keep).flatten():
+    for i in np.array(nms_keep).flatten():
         i = int(i)
-        x, y, w, h = boxes[i]
+        x, y, bw, bh = boxes_l[i]
+        cid = int(class_ids_l[i])
         detections.append({
-            "class_id": class_ids[i],
-            "label": COCO_CLASSES[class_ids[i]],
-            "confidence": scores[i],
+            "class_id": cid,
+            "label": COCO_CLASSES[cid],
+            "confidence": float(scores_l[i]),
             "box": [round(x * scale), round(y * scale),
-                    round((x + w) * scale), round((y + h) * scale)],   # x1,y1,x2,y2
+                    round((x + bw) * scale), round((y + bh) * scale)],  # x1,y1,x2,y2
         })
     return detections
 
