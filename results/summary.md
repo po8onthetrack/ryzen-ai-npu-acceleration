@@ -1,145 +1,152 @@
-## ResNet (CIFAR-10, 32×32) — INT8
+# Results Summary
 
-| Provider | Mean    | Throughput   | Speedup |
-|----------|---------|--------------|---------|
-| CPU      | 9.13 ms | 109.5 inf/s  | 1.0×    |
-| NPU      | 1.48 ms | 675.2 inf/s  | **6.2×**|
+Ryzen AI 9 HX 370 (XDNA2 "Strix" NPU) — ws007, Ubuntu 24.04.
+Ryzen AI Software 1.7.1, XRT 2.21.0, ONNX Runtime + VitisAI EP.
+All NPU runs verified by the compiled `AMD_AIE2P_4x8_CMC_Overlay.xmodel` artifact.
 
-NPU offload: 398/400 ops (99.5%); 2 ops on CPU.
+**Headline: YOLOv8m INT8 on the NPU = 25.6 ms inference / 5.2x vs FP32 CPU.
+With the decode optimized, end-to-end is ~27 ms (~37 inf/s).**
 
-## YOLOv8m (COCO, 640×640) — Ryzen AI 9 HX 370 (XDNA2)
+---
+
+## 1. YOLOv8m (COCO, 640x640) — precision ladder
+
+Model inference only (`session.run`).
 
 | Config    | Mean     | Median   | p95      | Throughput  | vs FP32 CPU |
 |-----------|----------|----------|----------|-------------|-------------|
-| FP32, CPU | 132.3 ms | 128.7 ms | 148.0 ms | 7.56 inf/s  | 1.0×        |
-| INT8, CPU | 168.4 ms | 169.8 ms | 172.2 ms | 5.89 inf/s  | 0.78×       |
-| BF16, CPU | 247.0 ms | 243.0 ms | 258.1 ms | 4.05 inf/s  | 0.54×       |
-| BF16, NPU | 66.4 ms  | 66.9 ms  | 68.2 ms  | 15.07 inf/s | **2.0×**    |
-| INT8, NPU(default threads) | 34.1 ms  | 34.0 ms  | 38.0 ms  | 29.34 inf/s | **3.9×**    |
-| **INT8, NPU (1 thread, spin off)** | **25.6 ms** | **25.6 ms**|**25.9 ms**|**39.0 inf/s** | **5.2×** |
+| FP32, CPU | 132.3 ms | 128.7 ms | 148.0 ms | 7.56 inf/s  | 1.0x        |
+| INT8, CPU | 168.4 ms | 165.9 ms | 177.9 ms | 5.94 inf/s  | 0.79x       |
+| BF16, CPU | 247.0 ms | 243.0 ms | 258.1 ms | 4.05 inf/s  | 0.54x       |
+| BF16, NPU | 66.4 ms  | 66.9 ms  | 68.2 ms  | 15.07 inf/s | **2.0x**    |
+| INT8, NPU | **25.6 ms** | **25.6 ms** | **25.9 ms** | **39.0 inf/s** | **5.2x** |
 
-The last row is the correct NPU configuration (see **Thread-pool** section). The 34.1 ms
-row uses ONNX Runtime's default thread pool, which busy-waits ~20 cores and is 30%
-slower — kept here for comparison.
-
-The 1 thread NPU is also the most stable measurement in the dataset: p95 within 1.2% of the mean
-(25.9 vs 25.6 ms), versus ~7% on the CPU.
+NPU INT8 uses the tuned config (`intra_op_num_threads=1`, section 5). It is also the most
+stable measurement: p95 within 1.2% of the mean, versus ~7% on the CPU.
 
 NPU offload — INT8: 1237/1262 ops (98%), 25 on CPU (excluded detection head).
               BF16:  925/925 ops (100%), none on CPU (no exclusion needed).
 
-## Detection correctness — CPU vs NPU (yolov8m_XINT8, test_image.jpg)
+Accuracy (mAP, quoted from AMD's docs — NOT measured here): FP32 44.0, BF16 42.8, INT8 38.1.
 
-Both produce **identical detections**: same 18 objects, same labels, same
-confidences to 2 d.p., same box coordinates.
+---
 
-=> The NPU is numerically equivalent to the CPU for the same quantized model.
-   Accuracy loss comes from quantization (FP32→INT8), NOT from running on the NPU.
+## 2. ResNet (CIFAR-10, 32x32) — INT8
 
-| Stage           | CPU      | NPU     | Speedup |
-|-----------------|----------|---------|---------|
-| Inference       | 217.5 ms | 34.7 ms | 6.3×    |
-| Decode + NMS    | 13.2 ms  | 19.8 ms | (CPU-bound in both) |
-| **End-to-end**  | 230.7 ms | 54.5 ms | **4.2×**|
+| Provider | Mean    | Throughput   | Speedup |
+|----------|---------|--------------|---------|
+| CPU      | 9.13 ms | 109.5 inf/s  | 1.0x    |
+| NPU      | 1.48 ms | 675.2 inf/s  | **6.2x**|
 
-(These NPU inference figures use the default thread config; the tuned config is
-faster still — see **Thread-pool** section.)
-Note: decode+NMS is unaccelerated . It's 6% of the CPU pipeline but 36% of the NPU pipeline 
+NPU offload: 398/400 ops (99.5%); 2 ops on CPU (final dequantize boundary).
 
-## The exclusion experiment 
+---
 
-| Model                        | Detections | Image                      |
-|------------------------------|------------|----------------------------|
-| INT8, no exclusion           | **0**      | results/detect_no_exclude.jpg |
-| INT8, head excluded          | **18**     | results/detect_int8_npu.jpg   |
+## 3. Correctness — CPU and NPU are numerically identical
+
+Same quantized model on CPU vs NPU produces **identical detections** — same objects,
+labels, confidences (2 d.p.), and boxes — on AMD's test image and on two of my own photos
+(dining table 4285x5712, street scene 1201x648).
+
+=> Accuracy loss comes from quantization (FP32->INT8), NOT from running on the NPU.
+
+---
+
+## 4. The exclusion experiment
+
+| Model              | Detections | Image                          |
+|--------------------|------------|--------------------------------|
+| INT8, no exclusion | **0**      | results/detect_no_exclude.jpg  |
+| INT8, head excluded| **18**     | results/detect_int8_npu.jpg    |
 
 Identical model, quantizer, hardware, and input. The only difference is
 `--exclude_subgraphs "[/model.22/Concat_3], [/model.22/Concat_10]]"`.
 
-Naive INT8 quantization of YOLOv8m produces a model that detects nothing.
-Because the detection head concatenates box coords (0-640) with confidences (0-1) into one tensor;
-INT8's single per-tensor scale must cover 640, so every confidence rounds to zero and
-nothing clears the 0.25 threshold.
+Naive INT8 quantization of YOLOv8m detects **nothing**: the detection head concatenates box
+coords (0-640) with confidences (0-1) into one tensor; INT8's single per-tensor scale must
+cover 640, so every confidence rounds to zero and nothing clears the 0.25 threshold. BF16
+(a float format) needs no exclusion — confirming this is specifically an INT8 dynamic-range
+problem.
 
-## Own test images — CPU/NPU equivalence generalizes
+---
 
-Two photos of my own (a dinner table, a street scene), run through `npu_detect.py`
-on both providers with `yolov8m_XINT8`.
+## 5. Thread-pool configuration (optimization 1)
 
-**Detections are identical on CPU and NPU** — same objects, same labels, same
-confidences to 2 d.p., same box coordinates. This holds on real-world photos, not
-just AMD's curated test image.
+ONNX Runtime's default pool spawns ~24 workers that busy-wait (`allow_spinning: 1`) while
+the NPU computes. They do no useful work but saturate cores.
 
-| Image     | Detections | CPU inference | NPU inference | Speedup |
-|-----------|------------|---------------|---------------|---------|
-| sample1 (dining table, 4285×5712) | 14 | 218.1 ms | 44.3 ms | 4.9× |
-| sample2 (street scene, 1201×648)  | 19 | 331.7 ms | 30.7 ms | 10.8× |
+`yolov8m_XINT8`, 500 runs (NPU) / 50 runs (CPU), 5 warmup discarded. CPU usage is `top`'s
+per-process figure (100% = one thread; ceiling ~2400% on 24 threads).
 
-(NPU inference here is the default thread config.)
+| Device | Threads | Spin | Mean     | p95      | Throughput  | CPU usage |
+|--------|---------|------|----------|----------|-------------|-----------|
+| NPU    | default | on   | 36.6 ms  | 44.1 ms  | 27.3 inf/s  | ~1800% (approx 18 threads) |
+| NPU    | default | off  | 26.9 ms  | 31.0 ms  | 37.2 inf/s  | ~49% (half thread) |
+| NPU    | **1**   | on   | 25.7 ms  | 26.0 ms  | 39.0 inf/s  | ~25% (quarter thread) |
+| NPU    | **1**   | off  | **25.6 ms** | **25.9 ms** | **39.1 inf/s** | **~25%** |
+| CPU    | default | on   | 168.4 ms | 177.9 ms | 5.94 inf/s  | ~2400% (all threads) |
+| CPU    | 1       | on   | 607.5 ms | 608.5 ms | 1.65 inf/s  | ~100% (one thread) |
 
-### Decode+NMS is CPU-bound and scales with detection count / image size
+**The symmetry — same knob, opposite signs:**
+- **CPU: threads help — 3.6x faster** (607.5 -> 168.4 ms). The convolutions parallelize;
+  each thread does real work.
+- **NPU: threads hurt — 1.4x slower** (25.7 -> 36.6 ms). The NPU does all the math, so those
+  threads only spin, contending with the coordinating thread.
 
-| Image     | NPU inference | Decode+NMS (NPU run) | Decode share |
-|-----------|---------------|----------------------|--------------|
-| sample1   | 44.3 ms       | 37.2 ms              | 46%      |
-| sample2   | 30.7 ms       | 20.7 ms              | 40%      |
+CPU occupancy is comparable in both default cases (~2400% CPU / ~1800% NPU) — but on the CPU
+that work is real, and on the NPU it is wasted. **With default settings you offload the math
+to the NPU and free nothing.**
 
-The decode is a Python loop over 8400 candidates plus NMS — it runs on the CPU and
-does not benefit from the NPU. On the CPU runs it costs only ~13 ms (6% of the
-pipeline); on the NPU runs it is ~45% of total time.
-
-
-## Thread-pool configuration — 30% faster on ~1/80th the CPU
-
-ONNX Runtime's default thread pool spawns ~24 workers that **busy-wait**
-(`allow_spinning: 1`) while waiting for work. During NPU inference they have nothing
-to do — the NPU does the math — so they spin, saturating ~20 cores and contending with
-the one thread that coordinates with the NPU.
-
-`yolov8m_XINT8`, 500 runs (NPU) / 50 runs (CPU), 5 warmup discarded.
-CPU usage is `top`'s per-process figure (100% = one core; ceiling ~2400% on 24 threads).
-
-| Device | Threads | Spin | Mean | p95 | Throughput | CPU usage |
-|--------|---------|------|------|-----|------------|-----------|
-| NPU | default (~24) | on  | 36.6 ms | 44.1 ms | 27.3 inf/s | **~1800%** (≈18 cores) |
-| NPU | default (~24) | off | 26.9 ms | 31.0 ms | 37.2 inf/s | ~49% (½ core) |
-| NPU | **1** | on  | 25.7 ms | 26.0 ms | 39.0 inf/s | **~25%** (¼ core) |
-| NPU | **1** | off | **25.6 ms** | **25.9 ms** | **39.1 inf/s** | **~25%** |
-| CPU | default (~24) | on | 168.4 ms | 177.9 ms | 5.94 inf/s | ~2400% (≈24 cores) |
-| CPU | 1 | on | 607.5 ms | 608.5 ms | 1.65 inf/s | ~100% (1 core) |
-
-### The symmetry — the same knob, opposite signs
-
-- **CPU: threads help — 3.6× faster** (607.5 → 168.4 ms). The convolutions genuinely
-  parallelize; each core does real work.
-- **NPU: threads hurt — 1.4× slower** (25.7 → 36.6 ms). The NPU does all the math, so
-  those same ~20 cores do nothing but spin, contending with the coordinating thread.
-
-Note the CPU occupancy is **identical (~2000%) in both default cases** — but on the CPU
-that work is real, and on the NPU it is entirely wasted. **With default settings you
-offload the math to the NPU and free nothing.**
-
-### Thread count is the fix; disabling spinning is only a partial one
-
-`allow_spinning=0` stops the workers spinning (26.9 ms, ~49% CPU) but they still exist.
-`intra_op_num_threads=1` means they are **never created** (25.7 ms, ~25% CPU).
-Combining both changes nothing further (25.6 ms, ~25%).
-
+**Thread count is the fix; disabling spinning is only partial.** `allow_spinning=0` stops the
+workers spinning (26.9 ms, ~49% CPU) but they still exist; `intra_op_num_threads=1` means they
+are never created (25.6 ms, ~25% CPU). Combining both adds nothing.
 **Recommended NPU config: `intra_op_num_threads = 1`.**
 
-### Efficiency, without a power sensor
+**Efficiency (power telemetry unavailable):** `xrt-smi` reports `Estimated Power: N/A`, and
+CPU-package RAPL counters require root (no sudo on the shared machine). CPU occupancy is the
+proxy:
 
-NPU power telemetry is unavailable (`xrt-smi`: `Estimated Power: N/A`) and CPU-package
-RAPL counters require root, which I don't have on the shared machine. CPU occupancy is
-the proxy:
+| NPU config  | Throughput     | CPU usage |
+|-------------|----------------|-----------|
+| default     | 27.3 inf/s     | ~1800%    |
+| `threads=1` | **39.0 inf/s** | **~25%**  |
 
-| NPU config | Throughput | CPU |
-|---|---|---|
-| default | 27.3 inf/s | ~2000% |
-| `threads=1` | **39.0 inf/s** | **~25%** |
+**43% more throughput on ~1/70th of the CPU** (~1800% -> ~25%). That is the actual argument
+for an NPU: it should do the inference *and* leave the CPU free — misconfigured, it does
+neither. ORT's thread options are documented as general performance knobs, but neither ORT's
+NPU guidance nor AMD's Ryzen AI examples set them; all of AMD's example scripts use the
+defaults.
 
-**43% more throughput on ~1/80th of the CPU.** That is the actual argument for an NPU:
-it should do the inference *and* leave the CPU free. Misconfigured, it does neither.
+---
 
-ORT's defaults are correct for CPU inference. Pointed at an NPU, the identical settings
-are pure waste. This is undocumented.
+## 6. Vectorized decode (optimization 2)
+
+The YOLO post-processing (decode + NMS) runs on the CPU and does not touch the NPU. The
+original decode looped over all 8400 candidates in Python. Vectorizing it — argmax / max /
+boolean-mask over the whole [8400,84] tensor in numpy — removes the per-candidate interpreter
+overhead. NMS is unchanged. Output verified **identical** (same 18 detections).
+
+| Decode        | Time    |
+|---------------|---------|
+| Python loop   | 19.8 ms |
+| **Vectorized**| **1.3 ms** (~15x) |
+
+End-to-end pipeline (inference + decode), YOLOv8m INT8 NPU, tuned config:
+
+| Pipeline               | Inference | Decode+NMS | End-to-end | Throughput |
+|------------------------|-----------|------------|------------|------------|
+| Before (loop decode)   | 25.6 ms   | 19.8 ms    | ~45 ms     | ~22 inf/s  |
+| **After (vectorized)** | 25.6 ms   | **1.3 ms** | **~27 ms** | **~37 inf/s** |
+
+Before the fix, decode was ~44% of the NPU pipeline (Amdahl's law: accelerating inference
+made the un-accelerated post-processing dominant). After, it is ~5%, and inference dominates
+again — as it should.
+
+---
+
+## Summary of the two optimizations
+
+Starting from a working deployment, two independent bottlenecks were found and fixed:
+1. **Thread config** (`intra_op_num_threads=1`): inference 36.6 -> 25.6 ms, CPU ~1800% -> ~25%.
+2. **Vectorized decode**: post-processing 19.8 -> 1.3 ms (~15x), output identical.
+Together: end-to-end ~45 ms -> ~27 ms (~22 -> ~37 inf/s).
