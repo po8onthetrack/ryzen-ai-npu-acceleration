@@ -140,7 +140,7 @@ def plot_threading_efficiency():
     for i, v in enumerate(lat):
         ax2.text(i, v + 1.5, f"{v:.1f} ms", ha="center", color=CPU_C, fontsize=9)
 
-    ax1.set_title("NPU inference: fixing the thread pool cuts CPU ~80x\n"
+    ax1.set_title("NPU inference: fixing the thread pool cuts CPU ~70x\n"
                   "(default busy-waits ~20 cores; the NPU does the math)")
     fig.tight_layout()
     path = os.path.join(OUT_DIR, "threading_efficiency.png")
