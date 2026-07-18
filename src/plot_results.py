@@ -66,10 +66,10 @@ def plot_precision_ladder():
 
     base = 132.3
     ax.axhline(base, color="grey", ls="--", lw=1, alpha=0.6)
-    # boxed callout parked in the open left area (axes-relative coords, never clipped)
-    ax.text(0.03, 0.55,
+    # boxed callout parked in the upper-left corner, above every bar (axes-relative coords, never clipped)
+    ax.text(0.03, 0.97,
             f"NPU INT8 (1 thread):\n{base/25.6:.1f}x vs FP32 CPU",
-            transform=ax.transAxes, color=NPU_C, fontweight="bold", fontsize=11,
+            transform=ax.transAxes, va="top", color=NPU_C, fontweight="bold", fontsize=11,
             bbox=dict(boxstyle="round,pad=0.4", fc="white", ec=NPU_C, alpha=0.9))
 
     ax.legend(handles=[Patch(color=CPU_C, label="CPU"),
