@@ -282,3 +282,7 @@ New finding: a first test on random data showed only 1.8x — random data yields
 detections, so unchanged NMS dominated both and hid the win. Benchmark post-processing on
 realistic detection counts, not random tensors.
 
+## 2026-07-21 - Polish final report
+
+### Added a future work item
+Rather than excluding the detection head (dropping it to CPU) or using BF16 throughout, another way could be quantizing the backbone to INT8 while keeping the head in BF16 on the NPU, recovering offload while preserving detection, this remains unexplored and added it to future work
